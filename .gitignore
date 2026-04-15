@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Old build folder
+safesight-landing-page/
+
+# ZIP files
+*.zip
+
+# Environment variables
+.env
+.env.local
+.env.production
+
+# Python model files
+*.pt
+*.pth
+
+# IDE
+.vscode/
+.idea/
+
+# OS junk
+Thumbs.db
+Desktop.ini
+.DS_Store
