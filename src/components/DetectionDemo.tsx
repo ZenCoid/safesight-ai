@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Camera, X, Loader2, AlertTriangle } from 'lucide-react';
+import { Camera, X, Loader2, AlertTriangle, CheckCircle } from 'lucide-react';
 import { ScrollReveal } from './ScrollReveal';
 import {
-  loadModel,
+  loadModelWithProgress,
   detect,
   drawDetections,
   getStats,
@@ -10,9 +10,10 @@ import {
 } from '../lib/detectionUtils';
 import type { InferenceSession } from 'onnxruntime-web';
 
-type DemoStatus = 'idle' | 'loading' | 'running' | 'error';
+type DemoStatus = 'idle' | 'preloading' | 'ready' | 'loading' | 'running' | 'error';
 
 export const DetectionDemo = () => {
+  const sectionRef = useRef<HTMLElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const offscreenRef = useRef<HTMLCanvasElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -20,8 +21,12 @@ export const DetectionDemo = () => {
   const animFrameRef = useRef<number>(0);
   const isRunningRef = useRef(false);
   const frameCountRef = useRef(0);
+  const detectFrameRef = useRef(0);
   const lastStatsTimeRef = useRef(0);
   const currentLatencyRef = useRef(0);
+  const lastDetectionsRef = useRef<any[]>([]);
+  const preloadedRef = useRef(false);
+  const preloadingRef = useRef(false);
 
   const [status, setStatus] = useState<DemoStatus>('idle');
   const [error, setError] = useState('');
@@ -29,6 +34,62 @@ export const DetectionDemo = () => {
   const [fps, setFps] = useState(0);
   const [latency, setLatency] = useState(0);
   const [loadingMsg, setLoadingMsg] = useState('');
+  const [loadingProgress, setLoadingProgress] = useState(0);
+
+  // Pre-load model when section scrolls into view
+  useEffect(() => {
+    const section = sectionRef.current;
+    if (!section) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && !preloadedRef.current && !preloadingRef.current) {
+            preloadModel();
+          }
+        });
+      },
+      { rootMargin: '400px 0px' } // Start loading when 400px away
+    );
+
+    observer.observe(section);
+    return () => observer.disconnect();
+  }, []);
+
+  const preloadModel = async () => {
+    preloadingRef.current = true;
+    setStatus('preloading');
+    setLoadingProgress(0);
+
+    try {
+      const session = await loadModelWithProgress('/best_quant.onnx', (progress) => {
+        setLoadingProgress(Math.round(progress * 100));
+      });
+      sessionRef.current = session;
+
+      // Pre-warm: run one dummy inference so WASM is fully ready
+      try {
+        const warmup = document.createElement('canvas');
+        warmup.width = 640;
+        warmup.height = 640;
+        const wctx = warmup.getContext('2d')!;
+        wctx.fillStyle = '#333';
+        wctx.fillRect(0, 0, 640, 640);
+        await detect(session, warmup);
+      } catch (e) {
+        // warmup failure is non-critical
+      }
+
+      preloadedRef.current = true;
+      preloadingRef.current = false;
+      setStatus('ready');
+    } catch (err: any) {
+      preloadingRef.current = false;
+      // If pre-loading fails, just go back to idle — will retry on click
+      setStatus('idle');
+      console.warn('Pre-load failed, will retry on click:', err.message);
+    }
+  };
 
   const stopDemo = useCallback(() => {
     isRunningRef.current = false;
@@ -39,8 +100,8 @@ export const DetectionDemo = () => {
       videoRef.current.remove();
       videoRef.current = null;
     }
-    if (sessionRef.current) { sessionRef.current.release(); sessionRef.current = null; }
-    setStatus('idle');
+    // Don't release session — keep it pre-loaded
+    setStatus('ready');
     setStats({ total: 0, helmet: 0, noHelmet: 0 });
     setFps(0);
     setLatency(0);
@@ -50,19 +111,25 @@ export const DetectionDemo = () => {
     try {
       setStatus('loading');
       setError('');
-      setLoadingMsg('Loading AI model... (this may take a moment)');
 
-      const session = await loadModel('/best.onnx');
-      sessionRef.current = session;
+      // If model not pre-loaded, load it now
+      if (!sessionRef.current) {
+        setLoadingMsg('Loading AI model...');
+        setLoadingProgress(0);
+        const session = await loadModelWithProgress('/best_quant.onnx', (progress) => {
+          setLoadingProgress(Math.round(progress * 100));
+        });
+        sessionRef.current = session;
+      }
 
       setLoadingMsg('Accessing camera...');
+      setLoadingProgress(95);
 
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
+        video: { width: { ideal: 480 }, height: { ideal: 360 }, facingMode: 'user' },
         audio: false,
       });
 
-      // Create video element directly in JS - no React involved
       const video = document.createElement('video');
       video.setAttribute('playsinline', '');
       video.setAttribute('autoplay', '');
@@ -71,7 +138,6 @@ export const DetectionDemo = () => {
       document.body.appendChild(video);
       videoRef.current = video;
 
-      // Wait for video to actually be ready
       await new Promise<void>((resolve, reject) => {
         const onReady = () => {
           video.removeEventListener('loadeddata', onReady);
@@ -83,12 +149,9 @@ export const DetectionDemo = () => {
 
       await video.play();
 
-      // Verify video is actually playing
       if (video.readyState < 2 || video.videoWidth === 0) {
-        throw new Error('Video is not playing. readyState=' + video.readyState + ' videoWidth=' + video.videoWidth);
+        throw new Error('Video not playing');
       }
-
-      console.log('Video is live:', video.videoWidth, 'x', video.videoHeight, 'readyState:', video.readyState);
 
       const offscreen = document.createElement('canvas');
       offscreenRef.current = offscreen;
@@ -96,45 +159,55 @@ export const DetectionDemo = () => {
       setStatus('running');
       isRunningRef.current = true;
       frameCountRef.current = 0;
+      detectFrameRef.current = 0;
       lastStatsTimeRef.current = performance.now();
+      lastDetectionsRef.current = [];
 
-      // Start detection loop
       const processFrame = async () => {
         if (!isRunningRef.current) return;
 
         const canvas = canvasRef.current;
-        if (!canvas || !video || !offscreenRef.current || !sessionRef.current) return;
-        if (video.readyState < 2 || video.videoWidth === 0) {
+        const vid = videoRef.current;
+        if (!canvas || !vid || !offscreenRef.current) return;
+        if (vid.readyState < 2 || vid.videoWidth === 0) {
           animFrameRef.current = requestAnimationFrame(processFrame);
           return;
         }
 
-        const vw = video.videoWidth;
-        const vh = video.videoHeight;
+        const vw = vid.videoWidth;
+        const vh = vid.videoHeight;
         canvas.width = vw;
         canvas.height = vh;
         offscreenRef.current.width = vw;
         offscreenRef.current.height = vh;
 
         const octx = offscreenRef.current.getContext('2d')!;
-        octx.drawImage(video, 0, 0, vw, vh);
+        octx.drawImage(vid, 0, 0, vw, vh);
 
-        try {
-          const result = await detect(sessionRef.current, offscreenRef.current);
-          drawDetections(canvas, offscreenRef.current!, result.detections);
+        frameCountRef.current++;
+        detectFrameRef.current++;
 
-          frameCountRef.current++;
-          currentLatencyRef.current = result.latency;
-          const now = performance.now();
-          if (now - lastStatsTimeRef.current >= 1000) {
-            setFps(frameCountRef.current);
-            setLatency(currentLatencyRef.current);
-            setStats(getStats(result.detections));
-            frameCountRef.current = 0;
-            lastStatsTimeRef.current = now;
+        // Run detection every 4 frames for smooth video
+        if (detectFrameRef.current >= 4 && sessionRef.current) {
+          detectFrameRef.current = 0;
+          try {
+            const result = await detect(sessionRef.current, offscreenRef.current);
+            lastDetectionsRef.current = result.detections;
+            currentLatencyRef.current = result.latency;
+          } catch (e) {
+            // silent
           }
-        } catch (e) {
-          console.error('Frame error:', e);
+        }
+
+        drawDetections(canvas, offscreenRef.current, lastDetectionsRef.current);
+
+        const now = performance.now();
+        if (now - lastStatsTimeRef.current >= 1000) {
+          setFps(frameCountRef.current);
+          setLatency(currentLatencyRef.current);
+          setStats(getStats(lastDetectionsRef.current));
+          frameCountRef.current = 0;
+          lastStatsTimeRef.current = now;
         }
 
         if (isRunningRef.current) {
@@ -144,7 +217,6 @@ export const DetectionDemo = () => {
       animFrameRef.current = requestAnimationFrame(processFrame);
 
     } catch (err: any) {
-      console.error('Demo failed:', err);
       stopDemo();
       setStatus('error');
       setError(
@@ -171,7 +243,7 @@ export const DetectionDemo = () => {
   }, []);
 
   return (
-    <section className="py-20 md:py-28 px-6 md:px-16 lg:px-24 bg-background">
+    <section ref={sectionRef} className="py-20 md:py-28 px-6 md:px-16 lg:px-24 bg-background">
       <div className="max-w-7xl mx-auto">
         <ScrollReveal>
           <h2 className="text-foreground text-3xl md:text-4xl font-semibold mb-4">
@@ -189,21 +261,63 @@ export const DetectionDemo = () => {
           <div className="relative w-full bg-hero-bg border border-border rounded-lg overflow-hidden">
             <div className="absolute inset-0 opacity-10 bg-[linear-gradient(rgba(255,255,255,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.1)_1px,transparent_1px)] bg-[size:40px_40px] pointer-events-none z-0" />
 
-            {status === 'idle' && (
+            {(status === 'idle' || status === 'preloading' || status === 'ready') && (
               <div className="relative z-10 flex flex-col items-center justify-center py-24 px-6">
-                <div className="w-20 h-20 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center mb-8">
-                  <Camera className="w-10 h-10 text-primary" />
+                <div className={`w-20 h-20 rounded-full border flex items-center justify-center mb-8 transition-all duration-500 ${
+                  status === 'ready'
+                    ? 'bg-primary/20 border-primary/40'
+                    : 'bg-primary/10 border-primary/20'
+                }`}>
+                  {status === 'ready' ? (
+                    <CheckCircle className="w-10 h-10 text-primary" />
+                  ) : (
+                    <Camera className="w-10 h-10 text-primary" />
+                  )}
                 </div>
                 <h3 className="text-foreground text-xl font-semibold mb-2">Try the Live Demo</h3>
-                <p className="text-muted-foreground text-sm text-center mb-8 max-w-md leading-relaxed">
+                <p className="text-muted-foreground text-sm text-center mb-4 max-w-md leading-relaxed">
                   Your webcam will detect helmet compliance in real time. All processing runs locally in your browser — nothing is sent to any server.
                 </p>
+
+                {status === 'preloading' && (
+                  <div className="mb-6">
+                    <p className="text-muted-foreground text-xs mb-2 text-center">Preparing AI model...</p>
+                    <div className="w-48 h-1.5 bg-secondary rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-primary transition-all duration-300 rounded-full"
+                        style={{ width: `${Math.min(loadingProgress, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {status === 'ready' && (
+                  <p className="text-primary text-xs mb-6 flex items-center gap-1.5">
+                    <CheckCircle className="w-3.5 h-3.5" />
+                    AI model loaded — ready to start instantly
+                  </p>
+                )}
+
                 <button
                   onClick={startDemo}
-                  className="bg-orange text-orange-foreground px-8 py-3 rounded-sm text-sm font-semibold hover:brightness-110 transition-all active:scale-[0.97] flex items-center gap-2"
+                  disabled={status === 'preloading'}
+                  className={`px-8 py-3 rounded-sm text-sm font-semibold transition-all active:scale-[0.97] flex items-center gap-2 ${
+                    status === 'ready'
+                      ? 'bg-orange text-orange-foreground hover:brightness-110'
+                      : 'bg-secondary text-foreground hover:bg-white/10'
+                  }`}
                 >
-                  <Camera className="w-4 h-4" />
-                  Start Live Demo
+                  {status === 'preloading' ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Loading...
+                    </>
+                  ) : (
+                    <>
+                      <Camera className="w-4 h-4" />
+                      Start Live Demo
+                    </>
+                  )}
                 </button>
               </div>
             )}
@@ -211,7 +325,14 @@ export const DetectionDemo = () => {
             {status === 'loading' && (
               <div className="relative z-10 flex flex-col items-center justify-center py-24 px-6">
                 <Loader2 className="w-10 h-10 text-primary animate-spin mb-6" />
-                <p className="text-foreground text-sm font-medium">{loadingMsg}</p>
+                <p className="text-foreground text-sm font-medium mb-4">{loadingMsg}</p>
+                <div className="w-64 h-2 bg-secondary rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-primary transition-all duration-300 rounded-full"
+                    style={{ width: `${Math.min(loadingProgress, 100)}%` }}
+                  />
+                </div>
+                <p className="text-muted-foreground/60 text-xs mt-2">{loadingProgress}%</p>
               </div>
             )}
 

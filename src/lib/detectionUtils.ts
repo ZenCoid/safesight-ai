@@ -39,11 +39,64 @@ function initONNX(): void {
   initialized = true;
 }
 
-// ===== Model Loading =====
+// ===== Model Loading with Progress =====
 
-export async function loadModel(modelPath: string): Promise<ort.InferenceSession> {
+export async function loadModelWithProgress(
+  modelPath: string,
+  onProgress?: (progress: number) => void
+): Promise<ort.InferenceSession> {
   initONNX();
+
+  if (onProgress) {
+    try {
+      const response = await fetch(modelPath);
+      if (!response.ok) throw new Error(`Failed to fetch model: ${response.status}`);
+      const contentLength = response.headers.get('content-length');
+      const total = contentLength ? parseInt(contentLength, 10) : 0;
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('No response body');
+
+      const chunks: Uint8Array[] = [];
+      let received = 0;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        received += value.length;
+        if (total > 0) {
+          onProgress(Math.max(0.1, (received / total) * 0.9));
+        }
+      }
+
+      const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
+      const modelData = new Uint8Array(totalLength);
+      let offset = 0;
+      for (const chunk of chunks) {
+        modelData.set(chunk, offset);
+        offset += chunk.length;
+      }
+
+      onProgress(0.95);
+      const session = await ort.InferenceSession.create(modelData.buffer as ArrayBuffer);
+      onProgress(1);
+      return session;
+    } catch (fetchError: any) {
+      // Fallback to normal loading if fetch fails (e.g., CORS issues)
+      console.warn('Progress loading failed, falling back:', fetchError);
+      onProgress(0.5);
+      const session = await ort.InferenceSession.create(modelPath);
+      onProgress(1);
+      return session;
+    }
+  }
+
   return await ort.InferenceSession.create(modelPath);
+}
+
+// Keep old loadModel for backwards compat
+export async function loadModel(modelPath: string): Promise<ort.InferenceSession> {
+  return loadModelWithProgress(modelPath);
 }
 
 // ===== NMS =====
@@ -176,7 +229,7 @@ export async function detect(
   return { detections, latency: Math.round(performance.now() - startTime) };
 }
 
-// ===== Drawing (now draws video frame + boxes) =====
+// ===== Drawing =====
 
 export function drawDetections(
   canvas: HTMLCanvasElement,
@@ -184,7 +237,6 @@ export function drawDetections(
   detections: Detection[]
 ): void {
   const ctx = canvas.getContext('2d')!;
-  // Draw the video frame first
   ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
 
   for (const det of detections) {
@@ -195,13 +247,11 @@ export function drawDetections(
       ? `HELMET ${(det.confidence * 100).toFixed(0)}%`
       : `NO HELMET ${(det.confidence * 100).toFixed(0)}%`;
 
-    // Box
     ctx.strokeStyle = color;
     ctx.lineWidth = 2;
     ctx.setLineDash([]);
     ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
 
-    // Corner accents
     const cl = Math.min(15, (x2 - x1) * 0.2, (y2 - y1) * 0.2);
     ctx.lineWidth = 3;
     ctx.beginPath(); ctx.moveTo(x1, y1 + cl); ctx.lineTo(x1, y1); ctx.lineTo(x1 + cl, y1); ctx.stroke();
@@ -209,7 +259,6 @@ export function drawDetections(
     ctx.beginPath(); ctx.moveTo(x1, y2 - cl); ctx.lineTo(x1, y2); ctx.lineTo(x1 + cl, y2); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(x2 - cl, y2); ctx.lineTo(x2, y2); ctx.lineTo(x2, y2 - cl); ctx.stroke();
 
-    // Label
     ctx.font = 'bold 11px monospace';
     const tw = ctx.measureText(label).width;
     ctx.fillStyle = color;
