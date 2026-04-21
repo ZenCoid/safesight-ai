@@ -34,6 +34,7 @@ export default function FAQ() {
 
   return (
     <section className="py-24 relative" id="faq">
+      <div className="section-divider absolute top-0 left-0 right-0" />
       <div className="max-w-3xl mx-auto px-4 sm:px-6">
         <motion.div
           initial={{ opacity: 0, y: 24 }}
@@ -41,16 +42,19 @@ export default function FAQ() {
           viewport={{ once: true }}
           className="text-center mb-14"
         >
-          <div className="font-mono text-xs text-primary mb-3 tracking-widest uppercase">FAQ</div>
-          <h2 className="font-display font-800 text-4xl sm:text-5xl text-white leading-tight">
+          <div className="inline-flex items-center gap-2 mb-4">
+            <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+            <span className="font-mono text-xs text-amber-400 uppercase tracking-widest font-medium">FAQ</span>
+          </div>
+          <h2 className="font-display font-800 text-3xl sm:text-4xl lg:text-5xl text-white leading-tight">
             Common Questions
           </h2>
-          <p className="text-light/60 mt-4 text-base">
+          <p className="text-dark-200 mt-4 text-base">
             Everything you need to know before deploying SafeSight AI on your site.
           </p>
         </motion.div>
 
-        <div className="space-y-3">
+        <div className="space-y-2">
           {faqs.map((f, i) => (
             <motion.div
               key={i}
@@ -58,21 +62,25 @@ export default function FAQ() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: i * 0.07 }}
-              className={`rounded-2xl bg-card overflow-hidden transition-all duration-300 ${
-                open === i ? 'border border-primary/30' : 'border border-border'
+              className={`rounded-xl overflow-hidden transition-all duration-300 ${
+                open === i
+                  ? 'bg-white/[0.03] border border-amber-500/15'
+                  : 'bg-white/[0.01] border border-white/[0.04] hover:border-white/[0.08]'
               }`}
             >
               <button
                 onClick={() => setOpen(open === i ? null : i)}
                 className="w-full flex items-start justify-between p-5 text-left gap-4 group"
               >
-                <span className={`font-display font-600 text-base leading-snug transition-colors duration-200 ${
-                  open === i ? 'text-primary' : 'text-white group-hover:text-primary'
+                <span className={`font-display font-500 text-[15px] leading-snug transition-colors duration-200 ${
+                  open === i ? 'text-amber-400' : 'text-white group-hover:text-white/90'
                 }`}>
                   {f.q}
                 </span>
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5 transition-all duration-200 ${
-                  open === i ? 'bg-primary text-bg' : 'bg-card border border-border text-muted'
+                <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 mt-0.5 transition-all duration-200 ${
+                  open === i
+                    ? 'bg-amber-500 text-dark-950'
+                    : 'bg-white/[0.04] border border-white/[0.06] text-dark-400'
                 }`}>
                   {open === i
                     ? <Minus className="w-3 h-3" />
@@ -91,7 +99,7 @@ export default function FAQ() {
                     transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
                     className="overflow-hidden"
                   >
-                    <p className="px-5 pb-5 text-light/55 text-sm leading-relaxed border-t border-border/50 pt-4">
+                    <p className="px-5 pb-5 text-dark-200 text-sm leading-relaxed border-t border-white/[0.04] pt-4">
                       {f.a}
                     </p>
                   </motion.div>

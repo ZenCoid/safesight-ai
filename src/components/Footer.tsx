@@ -16,31 +16,29 @@ const nav = {
 
 export default function Footer() {
   return (
-    <footer className="border-t border-border bg-surface/40">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-14">
+    <footer className="border-t border-white/[0.04] bg-surface/40">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-14">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-10 mb-12">
           {/* Brand */}
           <div className="col-span-2 md:col-span-2">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="relative">
-                <Shield className="w-6 h-6 text-primary" />
-                <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-primary badge-pulse" />
+            <div className="flex items-center gap-2.5 mb-4">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center">
+                <Shield className="w-3.5 h-3.5 text-dark-950" />
               </div>
-              <span className="font-display font-700 text-white text-lg">
-                Safe<span className="text-primary">Sight</span>
-                <span className="font-mono text-xs text-muted ml-1">AI</span>
+              <span className="font-display font-700 text-white text-[15px] tracking-tight">
+                SafeSight<span className="text-amber-500">.</span>
               </span>
             </div>
-            <p className="text-light/45 text-sm leading-relaxed max-w-xs">
+            <p className="text-dark-300 text-sm leading-relaxed max-w-xs">
               AI-powered construction site safety monitoring. Real-time PPE detection via your existing CCTV cameras. Zero cloud dependency.
             </p>
 
-            {/* Tech badge row */}
+            {/* Tech badges */}
             <div className="flex items-center gap-2 mt-5 flex-wrap">
               {['YOLOv11n', 'ONNX Runtime', 'Edge AI'].map(t => (
                 <span
                   key={t}
-                  className="font-mono text-[10px] text-muted border border-border rounded-full px-2.5 py-0.5"
+                  className="font-mono text-[10px] text-dark-400 glass rounded-full px-2.5 py-1"
                 >
                   {t}
                 </span>
@@ -51,13 +49,13 @@ export default function Footer() {
           {/* Nav columns */}
           {Object.entries(nav).map(([group, links]) => (
             <div key={group}>
-              <div className="font-mono text-[10px] text-muted uppercase tracking-widest mb-4">{group}</div>
+              <div className="font-mono text-[10px] text-dark-400 uppercase tracking-widest mb-4">{group}</div>
               <ul className="space-y-2.5">
                 {links.map(l => (
                   <li key={l.label}>
                     <a
                       href={l.href}
-                      className="text-sm text-light/45 hover:text-primary transition-colors duration-200"
+                      className="text-sm text-dark-300 hover:text-white transition-colors duration-200"
                     >
                       {l.label}
                     </a>
@@ -69,11 +67,11 @@ export default function Footer() {
         </div>
 
         {/* Bottom bar */}
-        <div className="border-t border-border pt-6 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p className="font-mono text-xs text-muted">
+        <div className="border-t border-white/[0.04] pt-6 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <p className="font-mono text-xs text-dark-400">
             © {new Date().getFullYear()} SafeSight AI. All rights reserved.
           </p>
-          <p className="font-mono text-xs text-muted">
+          <p className="font-mono text-xs text-dark-500">
             Built with YOLOv11n + ONNX Runtime · Runs entirely on-device
           </p>
         </div>

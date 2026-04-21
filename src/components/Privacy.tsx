@@ -15,7 +15,7 @@ const points = [
   {
     icon: Eye,
     title: 'Transparent by Design',
-    body: 'Our model weights, architecture, and detection logic are fully auditable. No black-box surprises — you see exactly what SafeSight AI sees.',
+    body: 'Our model weights, architecture, and detection logic are fully auditable. No black-box surprises.',
   },
   {
     icon: Lock,
@@ -26,8 +26,9 @@ const points = [
 
 export default function Privacy() {
   return (
-    <section className="py-24 relative border-t border-border" id="privacy">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+    <section className="py-24 relative" id="privacy">
+      <div className="section-divider absolute top-0 left-0 right-0" />
+      <div className="max-w-6xl mx-auto px-4 sm:px-6">
         <div className="grid lg:grid-cols-2 gap-16 items-center">
           {/* Left: Copy */}
           <motion.div
@@ -35,31 +36,40 @@ export default function Privacy() {
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
           >
-            <div className="font-mono text-xs text-primary mb-3 tracking-widest uppercase">Privacy</div>
-            <h2 className="font-display font-800 text-4xl sm:text-5xl text-white leading-tight mb-5">
+            <div className="inline-flex items-center gap-2 mb-4">
+              <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+              <span className="font-mono text-xs text-amber-400 uppercase tracking-widest font-medium">Privacy</span>
+            </div>
+            <h2 className="font-display font-800 text-3xl sm:text-4xl lg:text-5xl text-white leading-tight mb-5">
               Your Site.{' '}
-              <span className="gradient-text">Your Data.</span>
+              <span className="gradient-text-amber">Your Data.</span>
               <br />Always.
             </h2>
-            <p className="text-light/60 text-base leading-relaxed mb-8 max-w-md">
+            <p className="text-dark-200 text-base leading-relaxed mb-8 max-w-md">
               Unlike cloud-based safety systems, SafeSight AI never needs to see your footage to work. Every detection decision is made on your hardware, in real time, with zero network dependency.
             </p>
 
-            {/* Visual: data flow diagram */}
-            <div className="bg-card border border-border rounded-2xl p-5 font-mono text-xs">
-              <div className="text-muted text-[10px] uppercase tracking-widest mb-4">Data Flow</div>
-              <div className="flex items-center gap-3 mb-3">
-                <div className="px-3 py-1.5 bg-surface border border-border rounded-lg text-light/60">Camera Feed</div>
-                <span className="text-primary">→</span>
-                <div className="px-3 py-1.5 bg-primary/10 border border-primary/30 rounded-lg text-primary">Your Machine</div>
-              </div>
-              <div className="flex items-center gap-3 mb-3 pl-8">
-                <div className="w-px h-6 bg-border" />
-                <span className="text-[10px] text-muted">ONNX inference — local only</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="px-3 py-1.5 bg-surface border border-border rounded-lg text-light/60 opacity-30 line-through">Cloud Server</div>
-                <span className="text-accent text-sm">✕ Never reached</span>
+            {/* Data flow diagram */}
+            <div className="glass-card rounded-2xl p-5">
+              <div className="text-dark-400 mb-4 font-mono text-[10px] uppercase tracking-widest">Data Flow</div>
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="px-3 py-2 bg-dark-700 border border-white/[0.04] rounded-lg text-dark-200 text-sm font-medium">Camera Feed</div>
+                  <div className="flex-1 flex items-center">
+                    <div className="flex-1 h-px bg-gradient-to-r from-white/10 to-amber-500/30" />
+                    <div className="w-2 h-2 rounded-full bg-amber-500 mx-2" />
+                    <div className="flex-1 h-px bg-gradient-to-l from-white/10 to-amber-500/30" />
+                  </div>
+                  <div className="px-3 py-2 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-400 text-sm font-medium">Your Machine</div>
+                </div>
+                <div className="flex items-center gap-3 pl-8">
+                  <div className="w-px h-6 bg-dark-600" />
+                  <span className="font-mono text-[11px] text-dark-400">ONNX inference — local only</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="px-3 py-2 bg-dark-700 border border-white/[0.04] rounded-lg text-dark-400 text-sm opacity-30 line-through">Cloud Server</div>
+                  <span className="text-red-400 text-sm font-medium ml-2">✕ Never reached</span>
+                </div>
               </div>
             </div>
           </motion.div>
@@ -73,13 +83,13 @@ export default function Privacy() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.1 }}
-                className="card-hover rounded-2xl p-5 bg-card"
+                className="glass-card rounded-2xl p-5"
               >
-                <div className="w-9 h-9 rounded-lg bg-primary/8 border border-primary/20 flex items-center justify-center mb-4">
-                  <p.icon className="w-4 h-4 text-primary" />
+                <div className="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/15 flex items-center justify-center mb-4">
+                  <p.icon className="w-4 h-4 text-amber-500" />
                 </div>
-                <h3 className="font-display font-700 text-white text-base mb-2">{p.title}</h3>
-                <p className="text-light/50 text-xs leading-relaxed">{p.body}</p>
+                <h3 className="font-display font-700 text-white text-sm mb-2">{p.title}</h3>
+                <p className="text-dark-300 text-xs leading-relaxed">{p.body}</p>
               </motion.div>
             ))}
           </div>

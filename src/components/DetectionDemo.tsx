@@ -169,9 +169,6 @@ export const DetectionDemo = () => {
     lastDetectionsRef.current = [];
     lastVideoDimsRef.current = { w: 0, h: 0 };
 
-    // ─── ASYNC DETECTION (fire-and-forget) ───
-    // Runs in the background, does NOT block the render loop.
-    // Results appear on the next video frame after completion.
     const runDetectionAsync = async () => {
       try {
         const offscreen = offscreenRef.current;
@@ -184,14 +181,11 @@ export const DetectionDemo = () => {
         lastDetectionsRef.current = smoothed;
         currentLatencyRef.current = result.latency;
       } catch (e) {
-        // silent — occasional failures on edge frames are harmless
+        // silent
       }
       detectingRef.current = false;
     };
 
-    // ─── SYNC RENDER LOOP (never blocks) ───
-    // Draws video at full framerate. Detection overlays appear
-    // as soon as they're ready from the async background task.
     const renderLoop = () => {
       if (!isRunningRef.current) return;
 
@@ -210,21 +204,17 @@ export const DetectionDemo = () => {
       const vw = vid.videoWidth;
       const vh = vid.videoHeight;
 
-      // Only resize canvases when video dimensions actually change
-      // (avoids expensive buffer re-allocation every frame)
       if (lastVideoDimsRef.current.w !== vw || lastVideoDimsRef.current.h !== vh) {
         canvas.width = vw;
         canvas.height = vh;
         offscreen.width = vw;
         offscreen.height = vh;
-        // willReadFrequently: true keeps canvas in CPU memory for faster getImageData in detect()
         offscreenCtxRef.current = offscreen.getContext('2d', { willReadFrequently: true });
         lastVideoDimsRef.current = { w: vw, h: vh };
       }
 
       const octx = offscreenCtxRef.current || offscreen.getContext('2d')!;
 
-      // Draw video to offscreen (mirror for front camera so it feels like a mirror)
       octx.save();
       if (facingModeRef.current === 'user') {
         octx.translate(vw, 0);
@@ -233,10 +223,8 @@ export const DetectionDemo = () => {
       octx.drawImage(vid, 0, 0, vw, vh);
       octx.restore();
 
-      // Copy video frame + overlay detection boxes onto visible canvas
       drawDetections(canvas, offscreen, lastDetectionsRef.current);
 
-      // Frame counting and stats display
       frameCountRef.current++;
       const now = performance.now();
       if (now - lastStatsTimeRef.current >= 1000) {
@@ -247,7 +235,6 @@ export const DetectionDemo = () => {
         lastStatsTimeRef.current = now;
       }
 
-      // Kick off async detection if enough frames have passed and no detection is running
       detectFrameRef.current++;
       if (detectFrameRef.current >= 3 && !detectingRef.current && sessionRef.current) {
         detectFrameRef.current = 0;
@@ -255,7 +242,6 @@ export const DetectionDemo = () => {
         runDetectionAsync();
       }
 
-      // Always schedule next frame immediately — video stays buttery smooth
       animFrameRef.current = requestAnimationFrame(renderLoop);
     };
 
@@ -267,7 +253,6 @@ export const DetectionDemo = () => {
       setStatus('loading');
       setError('');
 
-      // If model not pre-loaded, load it now
       if (!sessionRef.current) {
         setLoadingMsg('Loading AI model...');
         setLoadingProgress(0);
@@ -318,7 +303,6 @@ export const DetectionDemo = () => {
       await startCameraStream(newMode);
       runDetectionLoop();
     } catch (err: any) {
-      // If back camera fails, revert to front
       try {
         facingModeRef.current = 'user';
         setFacingMode('user');
@@ -346,48 +330,36 @@ export const DetectionDemo = () => {
   }, []);
 
   return (
-    <section ref={sectionRef} className="py-20 md:py-28 px-6 md:px-16 lg:px-24 bg-background">
+    <section ref={sectionRef} className="bg-dark-900">
       <div className="max-w-7xl mx-auto">
         <ScrollReveal>
-          <h2 className="text-foreground text-3xl md:text-4xl font-semibold mb-4">
-            Live Detection Demo
-          </h2>
-          <p className="text-muted-foreground text-lg font-light mb-1 max-w-2xl">
-            Real-time helmet detection powered by YOLOv11n — running entirely in your browser.
-          </p>
-          <p className="text-muted-foreground/60 text-xs mb-8">
-            Uses your webcam. No data is sent to any server — all processing happens locally via ONNX Runtime.
-          </p>
-        </ScrollReveal>
-
-        <ScrollReveal>
-          <div className="relative w-full bg-hero-bg border border-border rounded-lg overflow-hidden">
-            <div className="absolute inset-0 opacity-10 bg-[linear-gradient(rgba(255,255,255,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.1)_1px,transparent_1px)] bg-[size:40px_40px] pointer-events-none z-0" />
+          <div className="relative w-full bg-dark-950 border border-white/[0.04] rounded-lg overflow-hidden">
+            <div className="absolute inset-0 opacity-[0.03] bg-[linear-gradient(rgba(255,255,255,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.1)_1px,transparent_1px)] bg-[size:40px_40px] pointer-events-none z-0" />
 
             {(status === 'idle' || status === 'preloading' || status === 'ready') && (
               <div className="relative z-10 flex flex-col items-center justify-center py-24 px-6">
-                <div className={`w-20 h-20 rounded-full border flex items-center justify-center mb-8 transition-all duration-500 ${
+                <div className={`w-20 h-20 rounded-2xl border flex items-center justify-center mb-8 transition-all duration-500 ${
                   status === 'ready'
-                    ? 'bg-primary/20 border-primary/40'
-                    : 'bg-primary/10 border-primary/20'
+                    ? 'bg-amber-500/15 border-amber-500/30'
+                    : 'bg-white/[0.03] border-white/[0.06]'
                 }`}>
                   {status === 'ready' ? (
-                    <CheckCircle className="w-10 h-10 text-primary" />
+                    <CheckCircle className="w-10 h-10 text-amber-500" />
                   ) : (
-                    <Camera className="w-10 h-10 text-primary" />
+                    <Camera className="w-10 h-10 text-amber-500/60" />
                   )}
                 </div>
-                <h3 className="text-foreground text-xl font-semibold mb-2">Try the Live Demo</h3>
-                <p className="text-muted-foreground text-sm text-center mb-4 max-w-md leading-relaxed">
+                <h3 className="text-white text-xl font-semibold mb-2">Try the Live Demo</h3>
+                <p className="text-dark-300 text-sm text-center mb-4 max-w-md leading-relaxed">
                   Your webcam will detect helmet compliance in real time. All processing runs locally in your browser — nothing is sent to any server.
                 </p>
 
                 {status === 'preloading' && (
                   <div className="mb-6">
-                    <p className="text-muted-foreground text-xs mb-2 text-center">Preparing AI model...</p>
-                    <div className="w-48 h-1.5 bg-secondary rounded-full overflow-hidden">
+                    <p className="text-dark-300 text-xs mb-2 text-center">Preparing AI model...</p>
+                    <div className="w-48 h-1.5 bg-dark-700 rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-primary transition-all duration-300 rounded-full"
+                        className="h-full bg-gradient-to-r from-amber-600 to-amber-400 transition-all duration-300 rounded-full"
                         style={{ width: `${Math.min(loadingProgress, 100)}%` }}
                       />
                     </div>
@@ -395,7 +367,7 @@ export const DetectionDemo = () => {
                 )}
 
                 {status === 'ready' && (
-                  <p className="text-primary text-xs mb-6 flex items-center gap-1.5">
+                  <p className="text-amber-400 text-xs mb-6 flex items-center gap-1.5">
                     <CheckCircle className="w-3.5 h-3.5" />
                     AI model loaded — ready to start instantly
                   </p>
@@ -404,10 +376,10 @@ export const DetectionDemo = () => {
                 <button
                   onClick={startDemo}
                   disabled={status === 'preloading'}
-                  className={`px-8 py-3 rounded-sm text-sm font-semibold transition-all active:scale-[0.97] flex items-center gap-2 ${
+                  className={`px-8 py-3 rounded-xl text-sm font-semibold transition-all active:scale-[0.97] flex items-center gap-2 ${
                     status === 'ready'
-                      ? 'bg-orange text-orange-foreground hover:brightness-110'
-                      : 'bg-secondary text-foreground hover:bg-white/10'
+                      ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-dark-950 hover:shadow-lg hover:shadow-amber-500/20'
+                      : 'bg-dark-700 text-white hover:bg-dark-600'
                   }`}
                 >
                   {status === 'preloading' ? (
@@ -427,15 +399,15 @@ export const DetectionDemo = () => {
 
             {status === 'loading' && (
               <div className="relative z-10 flex flex-col items-center justify-center py-24 px-6">
-                <Loader2 className="w-10 h-10 text-primary animate-spin mb-6" />
-                <p className="text-foreground text-sm font-medium mb-4">{loadingMsg}</p>
-                <div className="w-64 h-2 bg-secondary rounded-full overflow-hidden">
+                <Loader2 className="w-10 h-10 text-amber-500 animate-spin mb-6" />
+                <p className="text-white text-sm font-medium mb-4">{loadingMsg}</p>
+                <div className="w-64 h-2 bg-dark-700 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-primary transition-all duration-300 rounded-full"
+                    className="h-full bg-gradient-to-r from-amber-600 to-amber-400 transition-all duration-300 rounded-full"
                     style={{ width: `${Math.min(loadingProgress, 100)}%` }}
                   />
                 </div>
-                <p className="text-muted-foreground/60 text-xs mt-2">{loadingProgress}%</p>
+                <p className="text-dark-400 text-xs mt-2">{loadingProgress}%</p>
               </div>
             )}
 
@@ -444,40 +416,40 @@ export const DetectionDemo = () => {
                 <div className="relative w-full aspect-[4/3] md:aspect-[16/9] bg-black">
                   <canvas ref={canvasRef} className="w-full h-full object-contain" />
                 </div>
-                <div className="absolute left-0 w-full h-[1px] bg-primary/40 animate-scan-line shadow-[0_0_8px_rgba(22,163,74,0.6)] z-20 pointer-events-none" />
-                <div className="absolute top-4 right-4 bg-background/90 border border-border rounded p-3 min-w-[160px] z-30">
+                <div className="absolute left-0 w-full h-[1px] bg-amber-500/30 animate-scan-line shadow-[0_0_8px_rgba(245,158,11,0.4)] z-20 pointer-events-none" />
+                <div className="absolute top-4 right-4 glass rounded-xl p-3 min-w-[160px] z-30">
                   <div className="flex justify-between items-center mb-1">
-                    <span className="text-foreground text-xs font-mono">Detected:</span>
-                    <span className="text-foreground text-xs font-mono font-bold">{stats.total}</span>
+                    <span className="text-white text-xs font-mono">Detected:</span>
+                    <span className="text-white text-xs font-mono font-bold">{stats.total}</span>
                   </div>
                   <div className="flex justify-between items-center mb-1">
-                    <span className="text-foreground text-xs font-mono">Helmet:</span>
-                    <span className="text-primary text-xs font-mono font-bold">{stats.helmet}</span>
+                    <span className="text-white text-xs font-mono">Helmet:</span>
+                    <span className="text-green-400 text-xs font-mono font-bold">{stats.helmet}</span>
                   </div>
-                  <div className="flex justify-between items-center mb-3 pb-2 border-b border-border/50">
-                    <span className="text-foreground text-xs font-mono">No Helmet:</span>
-                    <span className="text-destructive text-xs font-mono font-bold">{stats.noHelmet}</span>
+                  <div className="flex justify-between items-center mb-3 pb-2 border-b border-white/5">
+                    <span className="text-white text-xs font-mono">No Helmet:</span>
+                    <span className="text-red-400 text-xs font-mono font-bold">{stats.noHelmet}</span>
                   </div>
                   <div className="flex justify-between items-center mb-1">
-                    <span className="text-muted-foreground text-[10px] font-mono">FPS:</span>
-                    <span className="text-muted-foreground text-[10px] font-mono">{fps}</span>
+                    <span className="text-dark-400 text-[10px] font-mono">FPS:</span>
+                    <span className="text-dark-400 text-[10px] font-mono">{fps}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground text-[10px] font-mono">Latency:</span>
-                    <span className="text-muted-foreground text-[10px] font-mono">{latency}ms</span>
+                    <span className="text-dark-400 text-[10px] font-mono">Latency:</span>
+                    <span className="text-dark-400 text-[10px] font-mono">{latency}ms</span>
                   </div>
                 </div>
                 <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between z-30">
                   <button
                     onClick={stopDemo}
-                    className="bg-destructive/90 text-white px-4 py-2 rounded-sm text-xs font-semibold hover:brightness-110 transition-all flex items-center gap-1.5"
+                    className="bg-red-500/80 backdrop-blur-sm text-white px-4 py-2 rounded-xl text-xs font-semibold hover:bg-red-500 transition-all flex items-center gap-1.5"
                   >
                     <X className="w-3 h-3" />
                     Stop Demo
                   </button>
                   <button
                     onClick={flipCamera}
-                    className="bg-white/15 backdrop-blur-sm text-white px-3 py-2 rounded-sm text-xs font-semibold hover:bg-white/25 transition-all flex items-center gap-1.5 border border-white/20"
+                    className="glass text-white px-3 py-2 rounded-xl text-xs font-semibold hover:bg-white/10 transition-all flex items-center gap-1.5"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 transition-transform duration-300 ${facingMode === 'environment' ? 'rotate-180' : ''}`} />
                     <span className="hidden sm:inline">{facingMode === 'user' ? 'Back Camera' : 'Front Camera'}</span>
@@ -488,11 +460,11 @@ export const DetectionDemo = () => {
 
             {status === 'error' && (
               <div className="relative z-10 flex flex-col items-center justify-center py-24 px-6">
-                <AlertTriangle className="w-10 h-10 text-destructive mb-6" />
-                <p className="text-destructive text-sm text-center max-w-md mb-6">{error}</p>
+                <AlertTriangle className="w-10 h-10 text-red-400 mb-6" />
+                <p className="text-red-400 text-sm text-center max-w-md mb-6">{error}</p>
                 <button
                   onClick={startDemo}
-                  className="bg-orange text-orange-foreground px-6 py-3 rounded-sm text-sm font-semibold hover:brightness-110 transition-all active:scale-[0.97]"
+                  className="bg-gradient-to-r from-amber-500 to-amber-600 text-dark-950 px-6 py-3 rounded-xl text-sm font-semibold hover:shadow-lg hover:shadow-amber-500/20 transition-all active:scale-[0.97]"
                 >
                   Try Again
                 </button>

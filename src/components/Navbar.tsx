@@ -25,30 +25,31 @@ export default function Navbar() {
       initial={{ y: -80, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        scrolled ? 'border-b border-border bg-bg/95 backdrop-blur-xl' : ''
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
+        scrolled
+          ? 'glass-strong shadow-lg shadow-black/20'
+          : ''
       }`}
     >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
         {/* Logo */}
-        <a href="#" className="flex items-center gap-2 group">
-          <div className="relative">
-            <Shield className="w-7 h-7 text-primary" />
-            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-primary badge-pulse" />
+        <a href="#" className="flex items-center gap-2.5 group">
+          <div className="relative w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center shadow-lg shadow-amber-500/20">
+            <Shield className="w-4 h-4 text-dark-950" />
           </div>
-          <span className="font-display font-700 text-lg text-white">
-            Safe<span className="text-primary">Sight</span>
-            <span className="font-mono text-xs text-muted ml-1">AI</span>
+          <span className="font-display font-700 text-[15px] text-white tracking-tight">
+            SafeSight
+            <span className="text-amber-500">.</span>
           </span>
         </a>
 
         {/* Desktop links */}
-        <div className="hidden md:flex items-center gap-8">
+        <div className="hidden md:flex items-center gap-1">
           {links.map(l => (
             <a
               key={l.label}
               href={l.href}
-              className="text-sm text-muted hover:text-primary transition-colors duration-200 font-body"
+              className="text-[13px] text-muted hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 transition-all duration-200 font-medium"
             >
               {l.label}
             </a>
@@ -57,7 +58,7 @@ export default function Navbar() {
 
         {/* CTA */}
         <div className="hidden md:flex items-center gap-3">
-          <a href="#demo" className="px-4 py-2 text-sm font-display font-600 text-bg bg-primary rounded-lg hover:bg-primary/90 transition-all duration-200 glow-primary">
+          <a href="#demo" className="btn-primary text-[13px]">
             Try Live Demo
           </a>
         </div>
@@ -65,7 +66,7 @@ export default function Navbar() {
         {/* Mobile toggle */}
         <button
           onClick={() => setOpen(!open)}
-          className="md:hidden text-light p-1"
+          className="md:hidden text-white p-1.5 rounded-lg hover:bg-white/5 transition-colors"
         >
           {open ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
@@ -79,26 +80,28 @@ export default function Navbar() {
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.3 }}
-            className="md:hidden overflow-hidden border-t border-border bg-surface"
+            className="md:hidden overflow-hidden border-t border-white/5 glass-strong"
           >
-            <div className="px-4 py-4 flex flex-col gap-4">
+            <div className="px-4 py-4 flex flex-col gap-1">
               {links.map(l => (
                 <a
                   key={l.label}
                   href={l.href}
                   onClick={() => setOpen(false)}
-                  className="text-sm text-light hover:text-primary transition-colors"
+                  className="text-sm text-light hover:text-white py-2.5 px-3 rounded-lg hover:bg-white/5 transition-all"
                 >
                   {l.label}
                 </a>
               ))}
-              <a
-                href="#demo"
-                onClick={() => setOpen(false)}
-                className="px-4 py-2 text-sm font-display text-center text-bg bg-primary rounded-lg"
-              >
-                Try Live Demo
-              </a>
+              <div className="pt-2 border-t border-white/5 mt-2">
+                <a
+                  href="#demo"
+                  onClick={() => setOpen(false)}
+                  className="btn-primary w-full justify-center text-sm"
+                >
+                  Try Live Demo
+                </a>
+              </div>
             </div>
           </motion.div>
         )}

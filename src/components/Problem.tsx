@@ -8,19 +8,21 @@ const problems = [
     body: 'A human safety officer can only watch one area at a time. Fatigue, distractions, and shift gaps create dangerous blind spots that put workers at risk every single day.',
     stat: '73%',
     statLabel: 'of incidents occur when no supervisor is watching',
-    color: 'text-accent',
-    bg: 'bg-accent/8',
-    border: 'border-accent/20',
+    color: 'text-red-400',
+    bg: 'bg-red-500/10',
+    border: 'border-red-500/20',
+    accentBg: 'bg-red-500',
   },
   {
     icon: DollarSign,
     title: 'Incidents Are Catastrophically Costly',
-    body: 'A single construction fatality costs upwards of $1.5M in direct costs, legal liability, and project delays — not counting the irreplaceable human loss. Prevention is infinitely cheaper.',
+    body: 'A single construction fatality costs upwards of $1.5M in direct costs, legal liability, and project delays — not counting the irreplaceable human loss.',
     stat: '$1.5M+',
     statLabel: 'average cost per construction fatality',
-    color: 'text-warn',
-    bg: 'bg-warn/8',
-    border: 'border-warn/20',
+    color: 'text-amber-400',
+    bg: 'bg-amber-500/10',
+    border: 'border-amber-500/20',
+    accentBg: 'bg-amber-500',
   },
   {
     icon: ClipboardList,
@@ -28,16 +30,17 @@ const problems = [
     body: 'OSHA, ISO 45001, and regional safety regulations are tightening every year. Manual paper-based compliance tracking is slow, error-prone, and fails during inspections.',
     stat: '40%',
     statLabel: 'of construction firms fail safety audits annually',
-    color: 'text-primary',
-    bg: 'bg-primary/8',
-    border: 'border-primary/20',
+    color: 'text-amber-300',
+    bg: 'bg-amber-400/10',
+    border: 'border-amber-400/20',
+    accentBg: 'bg-amber-400',
   },
 ]
 
 export default function Problem() {
   return (
     <section className="py-24 relative" id="problem">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 24 }}
@@ -45,18 +48,21 @@ export default function Problem() {
           viewport={{ once: true }}
           className="mb-16"
         >
-          <div className="font-mono text-xs text-primary mb-3 tracking-widest uppercase">The Problem</div>
-          <h2 className="font-display font-800 text-4xl sm:text-5xl text-white leading-tight max-w-xl">
+          <div className="inline-flex items-center gap-2 mb-4">
+            <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+            <span className="font-mono text-xs text-amber-400 uppercase tracking-widest font-medium">The Problem</span>
+          </div>
+          <h2 className="font-display font-800 text-3xl sm:text-4xl lg:text-5xl text-white leading-tight max-w-xl">
             The Cost of{' '}
-            <span className="text-accent">Looking Away</span>
+            <span className="text-red-400">Looking Away</span>
           </h2>
-          <p className="text-light/60 mt-4 max-w-xl text-base leading-relaxed">
+          <p className="text-dark-200 mt-4 max-w-xl text-base leading-relaxed">
             Construction is the world's most dangerous industry. Existing safety monitoring is reactive, not preventive — waiting for accidents instead of stopping them.
           </p>
         </motion.div>
 
-        {/* Cards */}
-        <div className="grid md:grid-cols-3 gap-6">
+        {/* Bento Grid Cards */}
+        <div className="bento-grid grid-cols-1 md:grid-cols-3">
           {problems.map((p, i) => (
             <motion.div
               key={p.title}
@@ -64,7 +70,7 @@ export default function Problem() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: i * 0.15 }}
-              className={`card-hover rounded-2xl p-6 bg-card relative overflow-hidden`}
+              className="bento-cell flex flex-col"
             >
               {/* Icon */}
               <div className={`w-10 h-10 rounded-xl ${p.bg} border ${p.border} flex items-center justify-center mb-5`}>
@@ -72,16 +78,13 @@ export default function Problem() {
               </div>
 
               <h3 className="font-display font-700 text-white text-lg mb-3">{p.title}</h3>
-              <p className="text-light/55 text-sm leading-relaxed mb-5">{p.body}</p>
+              <p className="text-dark-200 text-sm leading-relaxed mb-6 flex-grow">{p.body}</p>
 
               {/* Stat callout */}
-              <div className={`border-t ${p.border} pt-4`}>
-                <div className={`font-display font-800 text-3xl ${p.color} mb-0.5`}>{p.stat}</div>
-                <div className="font-mono text-[11px] text-muted">{p.statLabel}</div>
+              <div className={`border-t ${p.border} pt-5 mt-auto`}>
+                <div className={`font-display font-800 text-3xl ${p.color} mb-1`}>{p.stat}</div>
+                <div className="font-mono text-[11px] text-dark-400">{p.statLabel}</div>
               </div>
-
-              {/* Decorative corner */}
-              <div className={`absolute top-0 right-0 w-24 h-24 ${p.bg} rounded-full blur-2xl -z-0 opacity-50`} />
             </motion.div>
           ))}
         </div>
