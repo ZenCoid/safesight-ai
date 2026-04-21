@@ -1,63 +1,109 @@
-import React, { Suspense } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import ConstructionScene from './ConstructionScene';
 
-const Spline = React.lazy(() => import('@splinetool/react-spline'));
+export default function HeroSection() {
+  const sectionRef = useRef<HTMLElement>(null);
+  const [visible, setVisible] = useState(false);
 
-export const HeroSection = () => {
+  useEffect(() => {
+    const el = sectionRef.current;
+    if (!el) return;
+
+    // Staggered fade-up on load
+    const fadeEls = el.querySelectorAll('[data-fade]');
+    fadeEls.forEach((child, i) => {
+      const htmlEl = child as HTMLElement;
+      htmlEl.style.opacity = '0';
+      htmlEl.style.transform = 'translateY(24px)';
+      htmlEl.style.filter = 'blur(6px)';
+      htmlEl.style.transition = `opacity 0.7s ease ${i * 0.12}s, transform 0.7s ease ${i * 0.12}s, filter 0.7s ease ${i * 0.12}s`;
+    });
+
+    // Trigger after a tiny delay so transitions fire
+    requestAnimationFrame(() => {
+      fadeEls.forEach((child) => {
+        const htmlEl = child as HTMLElement;
+        htmlEl.style.opacity = '1';
+        htmlEl.style.transform = 'translateY(0)';
+        htmlEl.style.filter = 'blur(0)';
+      });
+    });
+
+    setVisible(true);
+  }, []);
+
   return (
-    <section className="relative min-h-screen flex items-end bg-hero-bg overflow-hidden">
-      <div className="absolute inset-0">
-        <Suspense fallback={<div className="absolute inset-0 bg-hero-bg" />}>
-          <Spline
-            scene="https://prod.spline.design/Slk6b8kz3LRlKiyk/scene.splinecode"
-            className="w-full h-full"
-          />
-        </Suspense>
-      </div>
+    <section
+      ref={sectionRef}
+      className="relative min-h-screen flex items-end overflow-hidden bg-[#060A13]"
+      style={{ fontFamily: "'Sora', sans-serif" }}
+    >
+      {/* ── Subtle radial gradient background ── */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background:
+            'radial-gradient(ellipse 80% 60% at 20% 80%, rgba(34,197,94,0.06) 0%, transparent 60%), radial-gradient(ellipse 60% 40% at 80% 20%, rgba(249,115,22,0.04) 0%, transparent 50%)',
+        }}
+      />
 
-      <div className="absolute inset-0 bg-black/40 z-[1] pointer-events-none" />
+      {/* ── Hero content: anchored bottom-left ── */}
+      <div className="relative z-10 w-full max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 pb-16 sm:pb-20 lg:pb-24 pt-32">
+        <div className="max-w-2xl">
+          {/* Badge */}
+          <div data-fade className="mb-6">
+            <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium tracking-wide border border-[#22C55E]/20 bg-[#22C55E]/5 text-[#22C55E]">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#22C55E] animate-pulse" />
+              AI-Powered Safety Detection
+            </span>
+          </div>
 
-      <div className="relative z-10 pointer-events-none w-full max-w-[90%] sm:max-w-md lg:max-w-2xl px-6 md:px-10 pb-10 md:pb-12 pt-32">
-        <h1 
-          className="text-foreground text-[clamp(2.5rem,7vw,5rem)] font-bold leading-[1.1] tracking-[-0.04em] mb-2 md:mb-4 opacity-0 animate-fade-up"
-          style={{ animationDelay: "0.2s" }}
-        >
-          AI that watches <br />
-          <span className="text-primary">your job site.</span>
-        </h1>
+          {/* Heading */}
+          <h1
+            data-fade
+            className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-white leading-[1.1] mb-6"
+            style={{ fontFamily: "'Sora', sans-serif" }}
+          >
+            Detect Safety{' '}
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#F97316] to-[#F59E0B]">
+              Violations
+            </span>{' '}
+            Before They Happen
+          </h1>
 
-        <p 
-          className="text-foreground/80 text-[clamp(1rem,2vw,1.5rem)] font-light mb-3 md:mb-6 opacity-0 animate-fade-up"
-          style={{ animationDelay: "0.4s" }}
-        >
-          Detects missing safety gear on your workers in real time using existing CCTV cameras.
-        </p>
+          {/* Description */}
+          <p
+            data-fade
+            className="text-base sm:text-lg text-white/60 leading-relaxed max-w-lg mb-8"
+          >
+            Real-time PPE detection powered by YOLOv11n. Keep your construction
+            site compliant and your workers safe — with zero hardware installs.
+          </p>
 
-        <p 
-          className="text-muted-foreground text-[clamp(0.875rem,1.5vw,1.125rem)] font-light mb-4 md:mb-8 opacity-0 animate-fade-up"
-          style={{ animationDelay: "0.55s" }}
-        >
-          Real-time PPE detection across six categories using your existing CCTV cameras. Alerts in under 200ms.
-        </p>
+          {/* CTA Buttons */}
+          <div data-fade className="flex flex-wrap gap-4 mb-4">
+            <a
+              href="#early-access"
+              className="inline-flex items-center justify-center px-6 py-3 rounded-lg text-sm font-semibold text-white bg-[#F97316] hover:bg-[#EA580C] transition-colors duration-200 shadow-lg shadow-[#F97316]/20"
+            >
+              Join Early Access
+            </a>
+            <a
+              href="#how-it-works"
+              className="inline-flex items-center justify-center px-6 py-3 rounded-lg text-sm font-semibold text-white/80 border border-white/10 hover:bg-white/5 hover:text-white transition-all duration-200"
+            >
+              See How It Works
+            </a>
+          </div>
 
-        <div 
-          className="flex flex-wrap gap-3 font-bold opacity-0 animate-fade-up pointer-events-auto"
-          style={{ animationDelay: "0.7s" }}
-        >
-          <button className="bg-orange text-orange-foreground px-6 py-3 md:px-8 md:py-4 text-sm font-semibold rounded-sm cursor-pointer hover:brightness-110 transition-all active:scale-[0.97]">
-            Join Early Access
-          </button>
-          <button className="bg-white/10 text-foreground border border-white/10 px-6 py-3 md:px-8 md:py-4 text-sm font-semibold rounded-sm cursor-pointer hover:bg-white/20 transition-all active:scale-[0.97]">
-            See How It Works
-          </button>
+          {/* ── Animation preview box ── */}
+          {visible && (
+            <div data-fade className="mt-12">
+              <ConstructionScene />
+            </div>
+          )}
         </div>
-
-        <p 
-          className="text-muted-foreground/50 text-[10px] md:text-xs font-light mt-4 md:mt-6 opacity-0 animate-fade-up"
-          style={{ animationDelay: "0.85s" }}
-        >
-          Currently in early development. Join the waitlist below.
-        </p>
       </div>
     </section>
   );
-};
+}
