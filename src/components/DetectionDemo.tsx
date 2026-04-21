@@ -49,7 +49,7 @@ export const DetectionDemo = () => {
           }
         });
       },
-      { rootMargin: '400px 0px' } // Start loading when 400px away
+      { rootMargin: '400px 0px' }
     );
 
     observer.observe(section);
@@ -85,7 +85,7 @@ export const DetectionDemo = () => {
       setStatus('ready');
     } catch (err: any) {
       preloadingRef.current = false;
-      // If pre-loading fails, just go back to idle — will retry on click
+      sessionRef.current = null;
       setStatus('idle');
       console.warn('Pre-load failed, will retry on click:', err.message);
     }
@@ -100,7 +100,6 @@ export const DetectionDemo = () => {
       videoRef.current.remove();
       videoRef.current = null;
     }
-    // Don't release session — keep it pre-loaded
     setStatus('ready');
     setStats({ total: 0, helmet: 0, noHelmet: 0 });
     setFps(0);
@@ -126,7 +125,7 @@ export const DetectionDemo = () => {
       setLoadingProgress(95);
 
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 480 }, height: { ideal: 360 }, facingMode: 'user' },
+        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
         audio: false,
       });
 
