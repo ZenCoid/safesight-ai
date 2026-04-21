@@ -6,6 +6,7 @@ import {
   detect,
   drawDetections,
   getStats,
+  DetectionSmoother,
   type DetectionStats,
 } from '../lib/detectionUtils';
 import type { InferenceSession } from 'onnxruntime-web';
@@ -27,6 +28,7 @@ export const DetectionDemo = () => {
   const lastDetectionsRef = useRef<any[]>([]);
   const preloadedRef = useRef(false);
   const preloadingRef = useRef(false);
+  const smootherRef = useRef(new DetectionSmoother());
 
   const [status, setStatus] = useState<DemoStatus>('idle');
   const [error, setError] = useState('');
@@ -100,6 +102,7 @@ export const DetectionDemo = () => {
       videoRef.current.remove();
       videoRef.current = null;
     }
+    smootherRef.current.reset();
     setStatus('ready');
     setStats({ total: 0, helmet: 0, noHelmet: 0 });
     setFps(0);
@@ -155,6 +158,9 @@ export const DetectionDemo = () => {
       const offscreen = document.createElement('canvas');
       offscreenRef.current = offscreen;
 
+      // Reset smoother for new session
+      smootherRef.current.reset();
+
       setStatus('running');
       isRunningRef.current = true;
       frameCountRef.current = 0;
@@ -186,12 +192,14 @@ export const DetectionDemo = () => {
         frameCountRef.current++;
         detectFrameRef.current++;
 
-        // Run detection every 4 frames for smooth video
-        if (detectFrameRef.current >= 4 && sessionRef.current) {
+        // Run detection every 3 frames (matched with backend DETECTION_INTERVAL)
+        if (detectFrameRef.current >= 3 && sessionRef.current) {
           detectFrameRef.current = 0;
           try {
             const result = await detect(sessionRef.current, offscreenRef.current);
-            lastDetectionsRef.current = result.detections;
+            // Apply temporal smoothing (same as backend)
+            const smoothed = smootherRef.current.smooth(result.detections);
+            lastDetectionsRef.current = smoothed;
             currentLatencyRef.current = result.latency;
           } catch (e) {
             // silent

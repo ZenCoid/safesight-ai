@@ -21,12 +21,26 @@ export interface DetectionStats {
 }
 
 // ===== Constants =====
+// Matched with CCTV backend tuning — strict Helmet, lenient No Helmet
 
 const INPUT_SIZE = 640;
-const CONF_THRESHOLD = 0.35;
+
+// Class-specific confidence thresholds (same as backend detector.py)
+const CLASS_THRESHOLDS: Record<number, number> = {
+  0: 0.35,  // Helmet — strict to avoid cap/cloth false positives
+  1: 0.20,  // No Helmet — lenient to catch all violations
+  2: 0.25,  // Worker — moderate
+};
+const DEFAULT_THRESHOLD = 0.20;
+
 const IOU_THRESHOLD = 0.45;
-const CLASS_LABELS = ['helmet', 'no_helmet'];
-const CLASS_COLORS = ['#16a34a', '#ef4444'];
+const CLASS_LABELS = ['helmet', 'no_helmet', 'worker'];
+const CLASS_COLORS = ['#16a34a', '#ef4444', '#3b82f6'];
+
+// Temporal smoothing config (same as backend)
+const SMOOTHING_BUFFER_SIZE = 3;
+const SMOOTHING_MIN_HITS = 2;
+const SMOOTHING_IOU = 0.15;
 
 // ===== ONNX Setup =====
 
@@ -197,7 +211,10 @@ export async function detect(
       const prob = outData[(4 + c) * numAnchors + i];
       if (prob > bestProb) { bestProb = prob; bestClass = c; }
     }
-    if (bestProb < CONF_THRESHOLD) continue;
+
+    // Class-specific threshold (same strategy as backend)
+    const threshold = CLASS_THRESHOLDS[bestClass] ?? DEFAULT_THRESHOLD;
+    if (bestProb < threshold) continue;
 
     const cx = outData[0 * numAnchors + i];
     const cy = outData[1 * numAnchors + i];
@@ -229,6 +246,40 @@ export async function detect(
   return { detections, latency: Math.round(performance.now() - startTime) };
 }
 
+// ===== Temporal Smoothing (matches backend logic) =====
+
+export class DetectionSmoother {
+  private buffer: Detection[][] = [];
+
+  smooth(detections: Detection[]): Detection[] {
+    this.buffer.push(detections);
+    if (this.buffer.length > SMOOTHING_BUFFER_SIZE) {
+      this.buffer.shift();
+    }
+
+    const bufferSize = this.buffer.length;
+    const minHits = bufferSize < 3 ? 1 : SMOOTHING_MIN_HITS;
+
+    // For each detection in current frame, check if it appeared in previous frames
+    return detections.filter((det) => {
+      let hits = 1; // current frame counts
+      for (let f = 0; f < bufferSize - 1; f++) {
+        for (const prev of this.buffer[f]) {
+          if (prev.classId === det.classId && calculateIoU(det.bbox, prev.bbox) >= SMOOTHING_IOU) {
+            hits++;
+            break;
+          }
+        }
+      }
+      return hits >= minHits;
+    });
+  }
+
+  reset(): void {
+    this.buffer = [];
+  }
+}
+
 // ===== Drawing =====
 
 export function drawDetections(
@@ -245,7 +296,9 @@ export function drawDetections(
     const isHelmet = det.classId === 0;
     const label = isHelmet
       ? `HELMET ${(det.confidence * 100).toFixed(0)}%`
-      : `NO HELMET ${(det.confidence * 100).toFixed(0)}%`;
+      : det.classId === 2
+        ? `WORKER ${(det.confidence * 100).toFixed(0)}%`
+        : `NO HELMET ${(det.confidence * 100).toFixed(0)}%`;
 
     ctx.strokeStyle = color;
     ctx.lineWidth = 2;
