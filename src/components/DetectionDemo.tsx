@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Camera, X, Loader2, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Camera, X, Loader2, AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react';
 import { ScrollReveal } from './ScrollReveal';
 import {
   loadModelWithProgress,
@@ -29,8 +29,10 @@ export const DetectionDemo = () => {
   const preloadedRef = useRef(false);
   const preloadingRef = useRef(false);
   const smootherRef = useRef(new DetectionSmoother());
+  const facingModeRef = useRef<'user' | 'environment'>('user');
 
   const [status, setStatus] = useState<DemoStatus>('idle');
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [error, setError] = useState('');
   const [stats, setStats] = useState<DetectionStats>({ total: 0, helmet: 0, noHelmet: 0 });
   const [fps, setFps] = useState(0);
@@ -93,7 +95,7 @@ export const DetectionDemo = () => {
     }
   };
 
-  const stopDemo = useCallback(() => {
+  const stopCamera = useCallback(() => {
     isRunningRef.current = false;
     if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = 0; }
     if (videoRef.current) {
@@ -102,11 +104,126 @@ export const DetectionDemo = () => {
       videoRef.current.remove();
       videoRef.current = null;
     }
+  }, []);
+
+  const stopDemo = useCallback(() => {
+    stopCamera();
     smootherRef.current.reset();
     setStatus('ready');
     setStats({ total: 0, helmet: 0, noHelmet: 0 });
     setFps(0);
     setLatency(0);
+  }, [stopCamera]);
+
+  const startCameraStream = useCallback(async (mode: 'user' | 'environment') => {
+    // Kill any existing camera
+    if (videoRef.current) {
+      const tracks = videoRef.current.srcObject as MediaStream;
+      if (tracks) tracks.getTracks().forEach((t) => t.stop());
+      videoRef.current.remove();
+      videoRef.current = null;
+    }
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: mode },
+      audio: false,
+    });
+
+    const video = document.createElement('video');
+    video.setAttribute('playsinline', '');
+    video.setAttribute('autoplay', '');
+    video.muted = true;
+    video.srcObject = stream;
+    document.body.appendChild(video);
+    videoRef.current = video;
+
+    await new Promise<void>((resolve, reject) => {
+      const onReady = () => {
+        video.removeEventListener('loadeddata', onReady);
+        resolve();
+      };
+      video.addEventListener('loadeddata', onReady);
+      setTimeout(() => reject(new Error('Video load timeout')), 10000);
+    });
+
+    await video.play();
+
+    if (video.readyState < 2 || video.videoWidth === 0) {
+      throw new Error('Video not playing');
+    }
+  }, []);
+
+  const runDetectionLoop = useCallback(() => {
+    smootherRef.current.reset();
+    isRunningRef.current = true;
+    frameCountRef.current = 0;
+    detectFrameRef.current = 0;
+    lastStatsTimeRef.current = performance.now();
+    lastDetectionsRef.current = [];
+
+    const processFrame = async () => {
+      if (!isRunningRef.current) return;
+
+      const canvas = canvasRef.current;
+      const vid = videoRef.current;
+      if (!canvas || !vid || !offscreenRef.current) return;
+      if (vid.readyState < 2 || vid.videoWidth === 0) {
+        animFrameRef.current = requestAnimationFrame(processFrame);
+        return;
+      }
+
+      const vw = vid.videoWidth;
+      const vh = vid.videoHeight;
+      canvas.width = vw;
+      canvas.height = vh;
+      offscreenRef.current.width = vw;
+      offscreenRef.current.height = vh;
+
+      const octx = offscreenRef.current.getContext('2d')!;
+
+      // Mirror for front camera so it feels like a mirror
+      if (facingModeRef.current === 'user') {
+        octx.translate(vw, 0);
+        octx.scale(-1, 1);
+      }
+      octx.drawImage(vid, 0, 0, vw, vh);
+      if (facingModeRef.current === 'user') {
+        octx.setTransform(1, 0, 0, 1, 0, 0);
+      }
+
+      frameCountRef.current++;
+      detectFrameRef.current++;
+
+      // Run detection every 3 frames (matched with backend DETECTION_INTERVAL)
+      if (detectFrameRef.current >= 3 && sessionRef.current) {
+        detectFrameRef.current = 0;
+        try {
+          const result = await detect(sessionRef.current, offscreenRef.current);
+          // Apply temporal smoothing (same as backend)
+          const smoothed = smootherRef.current.smooth(result.detections);
+          lastDetectionsRef.current = smoothed;
+          currentLatencyRef.current = result.latency;
+        } catch (e) {
+          // silent
+        }
+      }
+
+      drawDetections(canvas, offscreenRef.current, lastDetectionsRef.current);
+
+      const now = performance.now();
+      if (now - lastStatsTimeRef.current >= 1000) {
+        setFps(frameCountRef.current);
+        setLatency(currentLatencyRef.current);
+        setStats(getStats(lastDetectionsRef.current));
+        frameCountRef.current = 0;
+        lastStatsTimeRef.current = now;
+      }
+
+      if (isRunningRef.current) {
+        animFrameRef.current = requestAnimationFrame(processFrame);
+      }
+    };
+    animFrameRef.current = requestAnimationFrame(processFrame);
   }, []);
 
   const startDemo = useCallback(async () => {
@@ -127,101 +244,16 @@ export const DetectionDemo = () => {
       setLoadingMsg('Accessing camera...');
       setLoadingProgress(95);
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
-        audio: false,
-      });
+      facingModeRef.current = 'user';
+      setFacingMode('user');
 
-      const video = document.createElement('video');
-      video.setAttribute('playsinline', '');
-      video.setAttribute('autoplay', '');
-      video.muted = true;
-      video.srcObject = stream;
-      document.body.appendChild(video);
-      videoRef.current = video;
-
-      await new Promise<void>((resolve, reject) => {
-        const onReady = () => {
-          video.removeEventListener('loadeddata', onReady);
-          resolve();
-        };
-        video.addEventListener('loadeddata', onReady);
-        setTimeout(() => reject(new Error('Video load timeout')), 10000);
-      });
-
-      await video.play();
-
-      if (video.readyState < 2 || video.videoWidth === 0) {
-        throw new Error('Video not playing');
-      }
+      await startCameraStream('user');
 
       const offscreen = document.createElement('canvas');
       offscreenRef.current = offscreen;
 
-      // Reset smoother for new session
-      smootherRef.current.reset();
-
       setStatus('running');
-      isRunningRef.current = true;
-      frameCountRef.current = 0;
-      detectFrameRef.current = 0;
-      lastStatsTimeRef.current = performance.now();
-      lastDetectionsRef.current = [];
-
-      const processFrame = async () => {
-        if (!isRunningRef.current) return;
-
-        const canvas = canvasRef.current;
-        const vid = videoRef.current;
-        if (!canvas || !vid || !offscreenRef.current) return;
-        if (vid.readyState < 2 || vid.videoWidth === 0) {
-          animFrameRef.current = requestAnimationFrame(processFrame);
-          return;
-        }
-
-        const vw = vid.videoWidth;
-        const vh = vid.videoHeight;
-        canvas.width = vw;
-        canvas.height = vh;
-        offscreenRef.current.width = vw;
-        offscreenRef.current.height = vh;
-
-        const octx = offscreenRef.current.getContext('2d')!;
-        octx.drawImage(vid, 0, 0, vw, vh);
-
-        frameCountRef.current++;
-        detectFrameRef.current++;
-
-        // Run detection every 3 frames (matched with backend DETECTION_INTERVAL)
-        if (detectFrameRef.current >= 3 && sessionRef.current) {
-          detectFrameRef.current = 0;
-          try {
-            const result = await detect(sessionRef.current, offscreenRef.current);
-            // Apply temporal smoothing (same as backend)
-            const smoothed = smootherRef.current.smooth(result.detections);
-            lastDetectionsRef.current = smoothed;
-            currentLatencyRef.current = result.latency;
-          } catch (e) {
-            // silent
-          }
-        }
-
-        drawDetections(canvas, offscreenRef.current, lastDetectionsRef.current);
-
-        const now = performance.now();
-        if (now - lastStatsTimeRef.current >= 1000) {
-          setFps(frameCountRef.current);
-          setLatency(currentLatencyRef.current);
-          setStats(getStats(lastDetectionsRef.current));
-          frameCountRef.current = 0;
-          lastStatsTimeRef.current = now;
-        }
-
-        if (isRunningRef.current) {
-          animFrameRef.current = requestAnimationFrame(processFrame);
-        }
-      };
-      animFrameRef.current = requestAnimationFrame(processFrame);
+      runDetectionLoop();
 
     } catch (err: any) {
       stopDemo();
@@ -234,7 +266,35 @@ export const DetectionDemo = () => {
           : `Something went wrong: ${err.message || 'Unknown error'}`
       );
     }
-  }, [stopDemo]);
+  }, [startCameraStream, runDetectionLoop, stopDemo]);
+
+  const flipCamera = useCallback(async () => {
+    if (!isRunningRef.current || !sessionRef.current) return;
+
+    try {
+      isRunningRef.current = false;
+      if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = 0; }
+
+      const newMode = facingModeRef.current === 'user' ? 'environment' : 'user';
+      facingModeRef.current = newMode;
+      setFacingMode(newMode);
+
+      await startCameraStream(newMode);
+      runDetectionLoop();
+    } catch (err: any) {
+      // If back camera fails, revert to front
+      try {
+        facingModeRef.current = 'user';
+        setFacingMode('user');
+        await startCameraStream('user');
+        runDetectionLoop();
+      } catch (e) {
+        stopDemo();
+        setStatus('error');
+        setError('Camera switch failed. Please try again.');
+      }
+    }
+  }, [startCameraStream, runDetectionLoop, stopDemo]);
 
   useEffect(() => {
     return () => {
@@ -371,13 +431,20 @@ export const DetectionDemo = () => {
                     <span className="text-muted-foreground text-[10px] font-mono">{latency}ms</span>
                   </div>
                 </div>
-                <div className="absolute bottom-4 left-4 z-30">
+                <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between z-30">
                   <button
                     onClick={stopDemo}
                     className="bg-destructive/90 text-white px-4 py-2 rounded-sm text-xs font-semibold hover:brightness-110 transition-all flex items-center gap-1.5"
                   >
                     <X className="w-3 h-3" />
                     Stop Demo
+                  </button>
+                  <button
+                    onClick={flipCamera}
+                    className="bg-white/15 backdrop-blur-sm text-white px-3 py-2 rounded-sm text-xs font-semibold hover:bg-white/25 transition-all flex items-center gap-1.5 border border-white/20"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 transition-transform duration-300 ${facingMode === 'environment' ? 'rotate-180' : ''}`} />
+                    <span className="hidden sm:inline">{facingMode === 'user' ? 'Back Camera' : 'Front Camera'}</span>
                   </button>
                 </div>
               </>
