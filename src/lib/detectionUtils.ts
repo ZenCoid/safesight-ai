@@ -142,7 +142,29 @@ function nms(boxes: number[][], scores: number[], threshold: number): number[] {
   return kept;
 }
 
-// ===== Preprocessing =====
+// ===== Preprocessing (optimized with cached resources) =====
+
+// Cache preprocess canvas + tensor buffer to avoid 5MB allocation + DOM createElement every call
+let _preprocessCanvas: HTMLCanvasElement | null = null;
+let _preprocessCtx: CanvasRenderingContext2D | null = null;
+let _tensorBuffer: Float32Array | null = null;
+
+function ensurePreprocessCache(): {
+  canvas: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
+  data: Float32Array;
+} {
+  if (!_preprocessCanvas) {
+    _preprocessCanvas = document.createElement('canvas');
+    _preprocessCanvas.width = INPUT_SIZE;
+    _preprocessCanvas.height = INPUT_SIZE;
+    // willReadFrequently: true keeps canvas in CPU memory for faster getImageData()
+    _preprocessCtx = _preprocessCanvas.getContext('2d', { willReadFrequently: true })!;
+    // Pre-allocate the 640*640*3 float32 tensor data (~4.9MB) — reused across calls
+    _tensorBuffer = new Float32Array(3 * INPUT_SIZE * INPUT_SIZE);
+  }
+  return { canvas: _preprocessCanvas, ctx: _preprocessCtx!, data: _tensorBuffer! };
+}
 
 function preprocess(source: HTMLCanvasElement): {
   tensor: ort.Tensor;
@@ -150,6 +172,8 @@ function preprocess(source: HTMLCanvasElement): {
   padX: number;
   padY: number;
 } {
+  const { canvas, ctx, data } = ensurePreprocessCache();
+
   const srcW = source.width;
   const srcH = source.height;
   const scale = Math.min(INPUT_SIZE / srcW, INPUT_SIZE / srcH);
@@ -158,10 +182,6 @@ function preprocess(source: HTMLCanvasElement): {
   const padX = (INPUT_SIZE - newW) / 2;
   const padY = (INPUT_SIZE - newH) / 2;
 
-  const canvas = document.createElement('canvas');
-  canvas.width = INPUT_SIZE;
-  canvas.height = INPUT_SIZE;
-  const ctx = canvas.getContext('2d')!;
   ctx.fillStyle = 'rgb(114, 114, 114)';
   ctx.fillRect(0, 0, INPUT_SIZE, INPUT_SIZE);
   ctx.drawImage(source, 0, 0, srcW, srcH, padX, padY, newW, newH);
@@ -169,7 +189,6 @@ function preprocess(source: HTMLCanvasElement): {
   const imageData = ctx.getImageData(0, 0, INPUT_SIZE, INPUT_SIZE);
   const pixels = imageData.data;
   const channelSize = INPUT_SIZE * INPUT_SIZE;
-  const data = new Float32Array(3 * channelSize);
   for (let i = 0; i < channelSize; i++) {
     data[i] = pixels[i * 4] / 255.0;
     data[i + channelSize] = pixels[i * 4 + 1] / 255.0;

@@ -17,6 +17,7 @@ export const DetectionDemo = () => {
   const sectionRef = useRef<HTMLElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const offscreenRef = useRef<HTMLCanvasElement | null>(null);
+  const offscreenCtxRef = useRef<CanvasRenderingContext2D | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const sessionRef = useRef<InferenceSession | null>(null);
   const animFrameRef = useRef<number>(0);
@@ -30,6 +31,8 @@ export const DetectionDemo = () => {
   const preloadingRef = useRef(false);
   const smootherRef = useRef(new DetectionSmoother());
   const facingModeRef = useRef<'user' | 'environment'>('user');
+  const detectingRef = useRef(false);
+  const lastVideoDimsRef = useRef({ w: 0, h: 0 });
 
   const [status, setStatus] = useState<DemoStatus>('idle');
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
@@ -108,7 +111,10 @@ export const DetectionDemo = () => {
 
   const stopDemo = useCallback(() => {
     stopCamera();
+    detectingRef.current = false;
     smootherRef.current.reset();
+    lastDetectionsRef.current = [];
+    lastVideoDimsRef.current = { w: 0, h: 0 };
     setStatus('ready');
     setStats({ total: 0, helmet: 0, noHelmet: 0 });
     setFps(0);
@@ -156,60 +162,82 @@ export const DetectionDemo = () => {
   const runDetectionLoop = useCallback(() => {
     smootherRef.current.reset();
     isRunningRef.current = true;
+    detectingRef.current = false;
     frameCountRef.current = 0;
     detectFrameRef.current = 0;
     lastStatsTimeRef.current = performance.now();
     lastDetectionsRef.current = [];
+    lastVideoDimsRef.current = { w: 0, h: 0 };
 
-    const processFrame = async () => {
+    // ─── ASYNC DETECTION (fire-and-forget) ───
+    // Runs in the background, does NOT block the render loop.
+    // Results appear on the next video frame after completion.
+    const runDetectionAsync = async () => {
+      try {
+        const offscreen = offscreenRef.current;
+        if (!offscreen || !sessionRef.current) {
+          detectingRef.current = false;
+          return;
+        }
+        const result = await detect(sessionRef.current, offscreen);
+        const smoothed = smootherRef.current.smooth(result.detections);
+        lastDetectionsRef.current = smoothed;
+        currentLatencyRef.current = result.latency;
+      } catch (e) {
+        // silent — occasional failures on edge frames are harmless
+      }
+      detectingRef.current = false;
+    };
+
+    // ─── SYNC RENDER LOOP (never blocks) ───
+    // Draws video at full framerate. Detection overlays appear
+    // as soon as they're ready from the async background task.
+    const renderLoop = () => {
       if (!isRunningRef.current) return;
 
       const canvas = canvasRef.current;
       const vid = videoRef.current;
-      if (!canvas || !vid || !offscreenRef.current) return;
+      const offscreen = offscreenRef.current;
+      if (!canvas || !vid || !offscreen) {
+        animFrameRef.current = requestAnimationFrame(renderLoop);
+        return;
+      }
       if (vid.readyState < 2 || vid.videoWidth === 0) {
-        animFrameRef.current = requestAnimationFrame(processFrame);
+        animFrameRef.current = requestAnimationFrame(renderLoop);
         return;
       }
 
       const vw = vid.videoWidth;
       const vh = vid.videoHeight;
-      canvas.width = vw;
-      canvas.height = vh;
-      offscreenRef.current.width = vw;
-      offscreenRef.current.height = vh;
 
-      const octx = offscreenRef.current.getContext('2d')!;
+      // Only resize canvases when video dimensions actually change
+      // (avoids expensive buffer re-allocation every frame)
+      if (lastVideoDimsRef.current.w !== vw || lastVideoDimsRef.current.h !== vh) {
+        canvas.width = vw;
+        canvas.height = vh;
+        offscreen.width = vw;
+        offscreen.height = vh;
+        // willReadFrequently: true keeps canvas in CPU memory for faster getImageData in detect()
+        offscreenCtxRef.current = offscreen.getContext('2d', { willReadFrequently: true });
+        lastVideoDimsRef.current = { w: vw, h: vh };
+      }
 
-      // Mirror for front camera so it feels like a mirror
+      const octx = offscreenCtxRef.current || offscreen.getContext('2d')!;
+
+      // Draw video to offscreen (mirror for front camera so it feels like a mirror)
+      octx.save();
       if (facingModeRef.current === 'user') {
         octx.translate(vw, 0);
         octx.scale(-1, 1);
       }
       octx.drawImage(vid, 0, 0, vw, vh);
-      if (facingModeRef.current === 'user') {
-        octx.setTransform(1, 0, 0, 1, 0, 0);
-      }
+      octx.restore();
 
+      // Copy video frame + overlay detection boxes onto visible canvas
+      drawDetections(canvas, offscreen, lastDetectionsRef.current);
+
+      // Frame counting and stats display
       frameCountRef.current++;
-      detectFrameRef.current++;
-
-      // Run detection every 3 frames (matched with backend DETECTION_INTERVAL)
-      if (detectFrameRef.current >= 3 && sessionRef.current) {
-        detectFrameRef.current = 0;
-        try {
-          const result = await detect(sessionRef.current, offscreenRef.current);
-          // Apply temporal smoothing (same as backend)
-          const smoothed = smootherRef.current.smooth(result.detections);
-          lastDetectionsRef.current = smoothed;
-          currentLatencyRef.current = result.latency;
-        } catch (e) {
-          // silent
-        }
-      }
-
-      drawDetections(canvas, offscreenRef.current, lastDetectionsRef.current);
-
       const now = performance.now();
       if (now - lastStatsTimeRef.current >= 1000) {
         setFps(frameCountRef.current);
@@ -219,11 +247,19 @@ export const DetectionDemo = () => {
         lastStatsTimeRef.current = now;
       }
 
-      if (isRunningRef.current) {
-        animFrameRef.current = requestAnimationFrame(processFrame);
+      // Kick off async detection if enough frames have passed and no detection is running
+      detectFrameRef.current++;
+      if (detectFrameRef.current >= 3 && !detectingRef.current && sessionRef.current) {
+        detectFrameRef.current = 0;
+        detectingRef.current = true;
+        runDetectionAsync();
       }
+
+      // Always schedule next frame immediately — video stays buttery smooth
+      animFrameRef.current = requestAnimationFrame(renderLoop);
     };
-    animFrameRef.current = requestAnimationFrame(processFrame);
+
+    animFrameRef.current = requestAnimationFrame(renderLoop);
   }, []);
 
   const startDemo = useCallback(async () => {
