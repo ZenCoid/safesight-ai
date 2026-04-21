@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
 import { Cpu, Wifi, Lock } from 'lucide-react'
-import DetectionDemo from './DetectionDemo'
+import { DetectionDemo } from './DetectionDemo'
 
 const features = [
   { icon: Cpu, label: 'Runs 100% in your browser via ONNX Runtime WASM' },
